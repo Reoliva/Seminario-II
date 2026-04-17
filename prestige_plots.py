@@ -73,21 +73,51 @@ def save_formula_weights(formula_df: pd.DataFrame, output_path: Path) -> None:
     plt.close(fig)
 
 
-def save_outer_cv_metrics(metrics_df: pd.DataFrame, output_path: Path) -> None:
+def save_outer_cv_r2_spearman(metrics_df: pd.DataFrame, output_path: Path) -> None:
     if metrics_df.empty:
         return
-    mean_df = metrics_df.groupby("target", as_index=False)[["r2", "mae", "rmse", "spearman_rho"]].mean()
-    fig, ax = plt.subplots(figsize=(11, 5))
-    x = np.arange(len(mean_df))
-    width = 0.2
-    ax.bar(x - 1.5 * width, mean_df["r2"], width, label="R²")
-    ax.bar(x - 0.5 * width, mean_df["mae"], width, label="MAE")
-    ax.bar(x + 0.5 * width, mean_df["rmse"], width, label="RMSE")
-    ax.bar(x + 1.5 * width, mean_df["spearman_rho"], width, label="Spearman")
+
+    summary = (
+        metrics_df.groupby("target", as_index=False)[["r2", "spearman_rho"]]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+
+    summary.columns = [
+        "target" if col == ("target", "") else f"{col[0]}_{col[1]}"
+        for col in summary.columns
+    ]
+
+    x = np.arange(len(summary))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    ax.bar(
+        x - width / 2,
+        summary["r2_mean"],
+        width,
+        yerr=summary["r2_std"],
+        capsize=4,
+        label="R²",
+    )
+    ax.bar(
+        x + width / 2,
+        summary["spearman_rho_mean"],
+        width,
+        yerr=summary["spearman_rho_std"],
+        capsize=4,
+        label="Spearman",
+    )
+
+    ax.axhline(0, linewidth=1)
+
     ax.set_xticks(x)
-    ax.set_xticklabels([tidy_target(t) for t in mean_df["target"]], rotation=25, ha="right")
+    ax.set_xticklabels([tidy_target(t) for t in summary["target"]], rotation=25, ha="right")
+    ax.set_ylabel("Valor medio outer-CV")
     ax.set_title("Desempeño promedio en validación externa por grupos")
     ax.legend()
+
     fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -132,7 +162,7 @@ def main() -> None:
     save_heatmap(corr_all, plots_dir / "correlation_heatmap_absolute.png", family="absolute")
     save_heatmap(corr_all, plots_dir / "correlation_heatmap_relative.png", family="relative")
     save_formula_weights(formula_best, plots_dir / "optuna_formula_weights.png")
-    save_outer_cv_metrics(model_outer, plots_dir / "outer_cv_metrics.png")
+    save_outer_cv_r2_spearman(model_outer, plots_dir / "outer_cv_r2_spearman.png")
     save_feature_importance(perm_agg, plots_dir / "final_feature_importance.png")
 
     print(f"Gráficos guardados en: {plots_dir}")
